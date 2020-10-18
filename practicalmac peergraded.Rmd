@@ -1,0 +1,155 @@
+---
+title: "Peergraded PracMac assignment"
+author: "sayonee"
+date: "10/18/2020"
+output: html_document
+---
+#Introduction
+The basic aim of this project is to determine the manner in which 6 participants did their exercise
+
+#### Loading data
+from the given question
+```{r, eval = F}
+data_set <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+dim(data_set)
+#### Partitioning data sets
+```{r, eval = F}
+inTrain <- createDataPartition(y = data_set$classe,
+                               p = 0.7,
+                               list = F)
+training <- data_set[inTrain, ]; testing <- data_set[-inTrain, ]
+```
+Using 70% of the data for the training set and 30% for the test set.
+
+```{r, eval = F}
+dim(training); dim(testing)
+```
+
+---
+
+#### Cleaning data
+such that reading the data set is made easy 
+```{r, eval = F}
+training <- training[ , colSums(is.na(training)) == 0] # selecting only columns that do not have NAs
+testing <- testing[ , colSums(is.na(testing)) == 0]
+training <- training[, -nearZeroVar(training)] # removing columns with near zero variance
+testing <- testing[, -nearZeroVar(testing)]
+training <- training[ , -c(1:5)] # removing variables for row number, username, and timestamp
+testing <- testing[ , -c(1:5)]
+```
+Variables have been reduced:
+```{r, eval = F}
+dim(training); dim(testing)
+```
+---
+
+#### Training models
+The given set is checked
+##### Setting up parallel processing
+Will use 3 out of 4 CPU cores
+```{r, eval = F}
+cl <- makeCluster(detectCores() - 1)
+registerDoParallel(cl, cores = detectCores() -1)
+```
+
+---
+
+##### trainControl
+setting up arguments for cross validation
+```{r, eval = F}
+tr.ctrl <- trainControl(method = "cv",
+                        number = 5,
+                        allowParallel = TRUE,
+                        verboseIter = TRUE)
+```
+
+---
+
+##### Fitting different models
+Will use the following models like Random Forest.
+With an expectancy of at least one of these - specifically, the random forest model - to perform with an accuracy > 95%
+
+##### Naive Bayes
+checking with Naive Bayes model
+```{r, eval = F}
+modFit.nb <- train(classe ~ .,
+                   data = training,
+                   method = "nb",
+                   trControl = tr.ctrl)
+saveRDS(modFit.nb, "modfit.nb.rds") # saving the model to a file
+pred.nb <- predict(modFit.nb, testing)
+acc.nb <- confusionMatrix(pred.nb, testing$classe)$overall['Accuracy']
+acc.nb
+```
+---
+
+##### Boosted Logistic Regression
+checking if this model is more accurate 
+```{r, eval = F}
+modFit.logbst <- train(classe ~ .,
+                       data = training,
+                       method = "LogitBoost",
+                       trControl = tr.ctrl)
+saveRDS(modFit.logbst, "modfit.logbst.rds") # saving the model to a file
+pred.logbst <- predict(modFit.logbst, testing)
+acc.logbst <- confusionMatrix(pred.logbst, testing$classe)$overall['Accuracy']
+acc.logbs
+
+---
+
+##### Stochastic Gradient Boosting
+  Also evaluating using Stochastic Gradient Boosting to understand basic accuracy
+```{r, eval = F}
+  modFit.gbm <- train(classe ~ .,
+                     data = training,
+                     method = "gbm",
+                     trControl = tr.ctrl)
+saveRDS(modFit.gbm, "modfit.gbm.rds")  # saving the model to a file
+pred.gbm <- predict(modFit.gbm, testing)
+acc.gbm <- confusionMatrix(pred.gbm, testing$classe)$overall['Accuracy']
+acc.gbm
+```
+##### Random Forest
+Finally with Random Forest to understand it better
+```{r, eval = F}
+  modFit.rf <- train(classe ~ .,
+                     data = training,
+                     method = "rf",
+                     trControl = tr.ctrl)
+saveRDS(modFit.rf, "modfit.rf.rds") # saving the model to a file
+pred.rf <- predict(modFit.rf, testing)
+acc.rf <- confusionMatrix(pred.rf, testing$classe)$overall['Accuracy']
+acc.rf#### Stopping the cluster
+```{r, eval = F}
+stopCluster(cl)
+```
+---
+### Visualising model performances
+```{r, eval = F}
+acc.values <- c(acc.nb, acc.logbst, acc.gbm, acc.rpart, acc.rf)
+mod.names <- c("Naive Bayes", "Boosted Logistic Regression", "Stochastic Gradient Boosting", "CART", "Random Forest")
+x <- data.frame(Model = mod.names,
+                Accuracy = acc.values)
+ggplot(x, aes(x = Model, y = Accuracy)) + 
+  geom_bar(stat = "identity", aes(fill = Model)) +
+  theme_bw() + theme(legend.position = "none")
+```
+![](accuracy.png)
+
+We find that Random forest is the best performing model for evaluation, followed by Stochastic Gradient Boosting.We will continue with Random Forest 
+
+---
+
+### Prediction on new dataset
+The next segment sees the application of the Random Forest model to a different data set
+```{r, eval = F}
+test.part2 <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+dim(test.part2)
+```
+```
+## [1]  20 160
+```
+```{r, eval = F}
+predVal <- predict(modFit.rf, test.part2)
+```
+```
